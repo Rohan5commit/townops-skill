@@ -2,7 +2,9 @@ import Database from 'better-sqlite3';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 
-const DB_PATH = path.join(process.cwd(), 'townops.db');
+const DB_PATH = process.env.VERCEL
+  ? path.join('/tmp', 'townops.db')
+  : path.join(process.cwd(), 'townops.db');
 
 let db: Database.Database | null = null;
 

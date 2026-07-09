@@ -7,3 +7,4 @@ townops.db*
 .DS_Store
 coverage/
 
+.vercel
