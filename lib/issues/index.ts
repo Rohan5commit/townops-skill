@@ -168,9 +168,13 @@ export async function updateIssueStatus(
       args: [newStatus, now, now, issueId],
     });
   } else if (newStatus === 'assigned') {
+    const department = issue.assignedTo || 'general';
+    if (!issue.assignedTo) {
+      console.warn(`[townops] Issue ${issueId} assigned without a department — falling back to 'general'. Consider calling POST /api/issues/${issueId}/assign first.`);
+    }
     await db.execute({
-      sql: `UPDATE issues SET status=?, updated_at=?, assigned_to=COALESCE(assigned_to, ?) WHERE id=?`,
-      args: [newStatus, now, issue.assignedTo || 'general', issueId],
+      sql: `UPDATE issues SET status=?, updated_at=?, assigned_to=? WHERE id=?`,
+      args: [newStatus, now, department, issueId],
     });
   } else {
     await db.execute({
