@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
-import { getClient } from '../db';
+import { ensureDb } from '../db';
 import type {
   TownIssue,
   IssueStatus,
@@ -55,7 +55,7 @@ export async function createIssue(input: {
   affectedResidents?: number;
   tags?: string[];
 }): Promise<{ issue: TownIssue; classification: IssueClassification; priority: ReturnType<typeof computePriority> }> {
-  const db = getClient();
+  const db = await ensureDb();
   const id = uuidv4();
   const now = new Date().toISOString();
 
@@ -115,7 +115,7 @@ export async function createIssue(input: {
 
 // ---------- classify ----------
 export async function classifyExistingIssue(issueId: string): Promise<IssueClassification> {
-  const db = getClient();
+  const db = await ensureDb();
   const result = await db.execute({ sql: 'SELECT * FROM issues WHERE id = ?', args: [issueId] });
   if (result.rows.length === 0) throw new Error(`Issue ${issueId} not found`);
   const issue = rowToIssue(result.rows[0] as Record<string, unknown>);
@@ -128,7 +128,7 @@ export async function assignExistingIssue(
   issueId: string,
   department?: import('../schemas').Department
 ): Promise<AssignmentDecision> {
-  const db = getClient();
+  const db = await ensureDb();
   const result = await db.execute({ sql: 'SELECT * FROM issues WHERE id = ?', args: [issueId] });
   if (result.rows.length === 0) throw new Error(`Issue ${issueId} not found`);
   const issue = rowToIssue(result.rows[0] as Record<string, unknown>);
@@ -142,7 +142,7 @@ export async function updateIssueStatus(
   updatedBy: string = 'agent',
   note?: string
 ): Promise<StatusUpdate> {
-  const db = getClient();
+  const db = await ensureDb();
   const result = await db.execute({ sql: 'SELECT * FROM issues WHERE id = ?', args: [issueId] });
   if (result.rows.length === 0) throw new Error(`Issue ${issueId} not found`);
   const issue = rowToIssue(result.rows[0] as Record<string, unknown>);
@@ -196,7 +196,7 @@ export async function listIssues(filters: {
   limit?: number;
   offset?: number;
 }): Promise<{ issues: TownIssue[]; total: number }> {
-  const db = getClient();
+  const db = await ensureDb();
   const conditions: string[] = [];
   const args: (string | number | null | boolean)[] = [];
 
@@ -222,7 +222,7 @@ export async function listIssues(filters: {
 
 // ---------- get single ----------
 export async function getIssue(issueId: string): Promise<TownIssue> {
-  const db = getClient();
+  const db = await ensureDb();
   const result = await db.execute({ sql: 'SELECT * FROM issues WHERE id = ?', args: [issueId] });
   if (result.rows.length === 0) throw new Error(`Issue ${issueId} not found`);
   return rowToIssue(result.rows[0] as Record<string, unknown>);
@@ -230,7 +230,7 @@ export async function getIssue(issueId: string): Promise<TownIssue> {
 
 // ---------- zone priorities ----------
 export async function getZonePriorities(): Promise<ZoneSummary[]> {
-  const db = getClient();
+  const db = await ensureDb();
   const zones = ['downtown', 'northside', 'southside', 'eastend', 'westend', 'industrial', 'residential_north', 'residential_south', 'park_district', 'waterfront'] as const;
 
   const summaries: ZoneSummary[] = [];
@@ -285,7 +285,7 @@ export async function getIssueSummary(issueId: string): Promise<{
   timeOpen: string;
 }> {
   const issue = await getIssue(issueId);
-  const db = getClient();
+  const db = await ensureDb();
   const historyResult = await db.execute({
     sql: 'SELECT * FROM status_history WHERE issue_id = ? ORDER BY timestamp ASC',
     args: [issueId] as (string | number | null | boolean)[],

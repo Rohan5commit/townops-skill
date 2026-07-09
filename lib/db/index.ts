@@ -2,20 +2,43 @@ import { createClient, type Client } from '@libsql/client';
 import { v4 as uuidv4 } from 'uuid';
 
 let client: Client | null = null;
+let initialized = false;
+
+function getDbUrl(): string {
+  if (process.env.TURSO_DATABASE_URL) {
+    return process.env.TURSO_DATABASE_URL;
+  }
+  // Vercel serverless: only /tmp is writable
+  if (process.env.VERCEL) {
+    return 'file:/tmp/townops.db';
+  }
+  return 'file:local.db';
+}
 
 export function getClient(): Client {
   if (!client) {
     client = createClient({
-      url: process.env.TURSO_DATABASE_URL || 'file:local.db',
+      url: getDbUrl(),
       authToken: process.env.TURSO_AUTH_TOKEN || undefined,
     });
   }
   return client;
 }
 
-export async function initializeDb(): Promise<void> {
+/**
+ * Ensures the DB is initialized (schema + seed data).
+ * Safe to call on every request — only runs once per cold start.
+ */
+export async function ensureDb(): Promise<Client> {
   const db = getClient();
+  if (!initialized) {
+    await initializeDb(db);
+    initialized = true;
+  }
+  return db;
+}
 
+async function initializeDb(db: Client): Promise<void> {
   await db.executeMultiple(`
     CREATE TABLE IF NOT EXISTS issues (
       id TEXT PRIMARY KEY,
