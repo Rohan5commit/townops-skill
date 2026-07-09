@@ -112,7 +112,7 @@ export default function IssueDetailPage() {
   async function fetchIssue() {
     setLoading(true);
     try {
-      const res = await fetch(`/api/issues?id=${id}`);
+      const res = await fetch(`/api/issues/${id}`);
       const json = await res.json();
       setData(json);
     } catch {
@@ -348,7 +348,7 @@ export default function IssueDetailPage() {
             <div className="p-4 rounded-lg border border-border bg-card">
               <h3 className="font-semibold text-sm mb-3">API Endpoints</h3>
               <div className="space-y-1.5 text-xs">
-                <code className="block px-2 py-1 rounded bg-muted">GET /api/issues?id={id.substring(0, 8)}</code>
+                <code className="block px-2 py-1 rounded bg-muted">GET /api/issues/{id.substring(0, 8)}</code>
                 <code className="block px-2 py-1 rounded bg-muted">POST /api/issues/{id.substring(0, 8)}/status</code>
                 <code className="block px-2 py-1 rounded bg-muted">POST /api/issues/{id.substring(0, 8)}/classify</code>
                 <code className="block px-2 py-1 rounded bg-muted">POST /api/issues/{id.substring(0, 8)}/assign</code>
