@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
-import { getDb } from '../db';
+import { getClient } from '../db';
 import type {
   TownIssue,
   IssueStatus,
@@ -55,7 +55,7 @@ export async function createIssue(input: {
   affectedResidents?: number;
   tags?: string[];
 }): Promise<{ issue: TownIssue; classification: IssueClassification; priority: ReturnType<typeof computePriority> }> {
-  const db = getDb();
+  const db = getClient();
   const id = uuidv4();
   const now = new Date().toISOString();
 
@@ -82,26 +82,17 @@ export async function createIssue(input: {
     tags: input.tags || [],
   };
 
-  db.prepare(`
-    INSERT INTO issues (id, title, description, type, severity, urgency, status, zone, location, latitude, longitude, reported_by, assigned_to, priority_score, affected_residents, is_repeat, created_at, updated_at, resolved_at, tags)
-    VALUES (@id, @title, @description, @type, @severity, @urgency, @status, @zone, @location, @latitude, @longitude, @reported_by, @assigned_to, @priority_score, @affected_residents, @is_repeat, @created_at, @updated_at, @resolved_at, @tags)
-  `).run({
-    ...issue,
-    reported_by: issue.reportedBy,
-    assigned_to: issue.assignedTo,
-    priority_score: issue.priorityScore,
-    affected_residents: issue.affectedResidents ?? 0,
-    is_repeat: issue.isRepeat ? 1 : 0,
-    created_at: issue.createdAt,
-    updated_at: issue.updatedAt,
-    resolved_at: issue.resolvedAt,
-    tags: JSON.stringify(issue.tags),
+  await db.execute({
+    sql: `INSERT INTO issues (id, title, description, type, severity, urgency, status, zone, location, latitude, longitude, reported_by, assigned_to, priority_score, affected_residents, is_repeat, created_at, updated_at, resolved_at, tags)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [issue.id, issue.title, issue.description, issue.type, issue.severity, issue.urgency, issue.status, issue.zone, issue.location, issue.latitude ?? null, issue.longitude ?? null, issue.reportedBy, issue.assignedTo, issue.priorityScore, issue.affectedResidents ?? 0, issue.isRepeat ? 1 : 0, issue.createdAt, issue.updatedAt, issue.resolvedAt, JSON.stringify(issue.tags)],
   });
 
   // Log creation
-  db.prepare(`INSERT INTO status_history (id, issue_id, previous_status, new_status, updated_by, note, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?)`).run(
-    uuidv4(), id, 'reported', 'reported', input.reportedBy || 'agent', 'Issue created', now
-  );
+  await db.execute({
+    sql: `INSERT INTO status_history (id, issue_id, previous_status, new_status, updated_by, note, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    args: [uuidv4(), id, 'reported', 'reported', input.reportedBy || 'agent', 'Issue created', now],
+  });
 
   // Auto-classify
   const rawClassification = await classifyIssue(input.title, input.description);
@@ -110,14 +101,9 @@ export async function createIssue(input: {
   const priority = computePriority(updatedIssue);
 
   // Update issue with classification results
-  db.prepare(`
-    UPDATE issues SET severity=@severity, urgency=@urgency, priority_score=@priorityScore, updated_at=@updatedAt WHERE id=@id
-  `).run({
-    id,
-    severity: classification.severity,
-    urgency: classification.urgency,
-    priorityScore: priority.score,
-    updatedAt: new Date().toISOString(),
+  await db.execute({
+    sql: `UPDATE issues SET severity=?, urgency=?, priority_score=?, updated_at=? WHERE id=?`,
+    args: [classification.severity, classification.urgency, priority.score, new Date().toISOString(), id],
   });
 
   return {
@@ -129,12 +115,12 @@ export async function createIssue(input: {
 
 // ---------- classify ----------
 export async function classifyExistingIssue(issueId: string): Promise<IssueClassification> {
-  const db = getDb();
-  const row = db.prepare('SELECT * FROM issues WHERE id = ?').get(issueId) as Record<string, unknown> | undefined;
-  if (!row) throw new Error(`Issue ${issueId} not found`);
-  const issue = rowToIssue(row);
-  const result = await classifyIssue(issue.title, issue.description);
-  return { ...result, issueId };
+  const db = getClient();
+  const result = await db.execute({ sql: 'SELECT * FROM issues WHERE id = ?', args: [issueId] });
+  if (result.rows.length === 0) throw new Error(`Issue ${issueId} not found`);
+  const issue = rowToIssue(result.rows[0] as Record<string, unknown>);
+  const clsResult = await classifyIssue(issue.title, issue.description);
+  return { ...clsResult, issueId };
 }
 
 // ---------- assign ----------
@@ -142,24 +128,24 @@ export async function assignExistingIssue(
   issueId: string,
   department?: import('../schemas').Department
 ): Promise<AssignmentDecision> {
-  const db = getDb();
-  const row = db.prepare('SELECT * FROM issues WHERE id = ?').get(issueId) as Record<string, unknown> | undefined;
-  if (!row) throw new Error(`Issue ${issueId} not found`);
-  const issue = rowToIssue(row);
+  const db = getClient();
+  const result = await db.execute({ sql: 'SELECT * FROM issues WHERE id = ?', args: [issueId] });
+  if (result.rows.length === 0) throw new Error(`Issue ${issueId} not found`);
+  const issue = rowToIssue(result.rows[0] as Record<string, unknown>);
   return assignIssue(issue, department);
 }
 
 // ---------- status update ----------
-export function updateIssueStatus(
+export async function updateIssueStatus(
   issueId: string,
   newStatus: IssueStatus,
   updatedBy: string = 'agent',
   note?: string
-): StatusUpdate {
-  const db = getDb();
-  const row = db.prepare('SELECT * FROM issues WHERE id = ?').get(issueId) as Record<string, unknown> | undefined;
-  if (!row) throw new Error(`Issue ${issueId} not found`);
-  const issue = rowToIssue(row);
+): Promise<StatusUpdate> {
+  const db = getClient();
+  const result = await db.execute({ sql: 'SELECT * FROM issues WHERE id = ?', args: [issueId] });
+  if (result.rows.length === 0) throw new Error(`Issue ${issueId} not found`);
+  const issue = rowToIssue(result.rows[0] as Record<string, unknown>);
 
   if (!isValidTransition(issue.status, newStatus)) {
     const validTargets = VALID_TRANSITIONS[issue.status] || [];
@@ -176,69 +162,85 @@ export function updateIssueStatus(
     timestamp: now,
   };
 
-  const setFields: string[] = ['status = @newStatus', 'updated_at = @updatedAt'];
-  if (newStatus === 'resolved') setFields.push('resolved_at = @resolvedAt');
-  if (newStatus === 'assigned') setFields.push('assigned_to = COALESCE(assigned_to, @assignedTo)');
+  if (newStatus === 'resolved') {
+    await db.execute({
+      sql: `UPDATE issues SET status=?, updated_at=?, resolved_at=? WHERE id=?`,
+      args: [newStatus, now, now, issueId],
+    });
+  } else if (newStatus === 'assigned') {
+    await db.execute({
+      sql: `UPDATE issues SET status=?, updated_at=?, assigned_to=COALESCE(assigned_to, ?) WHERE id=?`,
+      args: [newStatus, now, issue.assignedTo || 'general', issueId],
+    });
+  } else {
+    await db.execute({
+      sql: `UPDATE issues SET status=?, updated_at=? WHERE id=?`,
+      args: [newStatus, now, issueId],
+    });
+  }
 
-  db.prepare(`UPDATE issues SET ${setFields.join(', ')} WHERE id = @id`).run({
-    id: issueId,
-    newStatus,
-    updatedAt: now,
-    resolvedAt: newStatus === 'resolved' ? now : null,
-    assignedTo: issue.assignedTo || 'general',
+  await db.execute({
+    sql: `INSERT INTO status_history (id, issue_id, previous_status, new_status, updated_by, note, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    args: [uuidv4(), issueId, issue.status, newStatus, updatedBy, note || null, now],
   });
-
-  db.prepare(`INSERT INTO status_history (id, issue_id, previous_status, new_status, updated_by, note, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?)`).run(
-    uuidv4(), issueId, issue.status, newStatus, updatedBy, note || null, now
-  );
 
   return update;
 }
 
 // ---------- list ----------
-export function listIssues(filters: {
+export async function listIssues(filters: {
   zone?: string;
   status?: string;
   type?: string;
   severity?: string;
   limit?: number;
   offset?: number;
-}): { issues: TownIssue[]; total: number } {
-  const db = getDb();
+}): Promise<{ issues: TownIssue[]; total: number }> {
+  const db = getClient();
   const conditions: string[] = [];
-  const params: Record<string, unknown> = {
-    limit: filters.limit || 20,
-    offset: filters.offset || 0,
-  };
+  const args: (string | number | null | boolean)[] = [];
 
-  if (filters.zone) { conditions.push('zone = @zone'); params.zone = filters.zone; }
-  if (filters.status) { conditions.push('status = @status'); params.status = filters.status; }
-  if (filters.type) { conditions.push('type = @type'); params.type = filters.type; }
-  if (filters.severity) { conditions.push('severity = @severity'); params.severity = filters.severity; }
+  if (filters.zone) { conditions.push('zone = ?'); args.push(filters.zone); }
+  if (filters.status) { conditions.push('status = ?'); args.push(filters.status); }
+  if (filters.type) { conditions.push('type = ?'); args.push(filters.type); }
+  if (filters.severity) { conditions.push('severity = ?'); args.push(filters.severity); }
 
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
-  const total = (db.prepare(`SELECT COUNT(*) as count FROM issues ${where}`).get(params) as { count: number }).count;
-  const rows = db.prepare(`SELECT * FROM issues ${where} ORDER BY priority_score DESC, created_at DESC LIMIT @limit OFFSET @offset`).all(params) as Record<string, unknown>[];
+  const limit = filters.limit || 20;
+  const offset = filters.offset || 0;
 
-  return { issues: rows.map(rowToIssue), total };
+  const countResult = await db.execute({ sql: `SELECT COUNT(*) as count FROM issues ${where}`, args: args as (string | number | null | boolean)[] });
+  const total = Number(countResult.rows[0]?.count ?? 0);
+
+  const rowsResult = await db.execute({
+    sql: `SELECT * FROM issues ${where} ORDER BY priority_score DESC, created_at DESC LIMIT ? OFFSET ?`,
+    args: [...args, limit, offset] as (string | number | null | boolean)[],
+  });
+
+  return { issues: rowsResult.rows.map(r => rowToIssue(r as Record<string, unknown>)), total };
 }
 
 // ---------- get single ----------
-export function getIssue(issueId: string): TownIssue {
-  const db = getDb();
-  const row = db.prepare('SELECT * FROM issues WHERE id = ?').get(issueId) as Record<string, unknown> | undefined;
-  if (!row) throw new Error(`Issue ${issueId} not found`);
-  return rowToIssue(row);
+export async function getIssue(issueId: string): Promise<TownIssue> {
+  const db = getClient();
+  const result = await db.execute({ sql: 'SELECT * FROM issues WHERE id = ?', args: [issueId] });
+  if (result.rows.length === 0) throw new Error(`Issue ${issueId} not found`);
+  return rowToIssue(result.rows[0] as Record<string, unknown>);
 }
 
 // ---------- zone priorities ----------
-export function getZonePriorities(): ZoneSummary[] {
-  const db = getDb();
+export async function getZonePriorities(): Promise<ZoneSummary[]> {
+  const db = getClient();
   const zones = ['downtown', 'northside', 'southside', 'eastend', 'westend', 'industrial', 'residential_north', 'residential_south', 'park_district', 'waterfront'] as const;
 
-  return zones.map(zone => {
-    const rows = db.prepare(`SELECT * FROM issues WHERE zone = ? AND status != 'resolved' ORDER BY priority_score DESC`).all(zone) as Record<string, unknown>[];
-    const issues = rows.map(rowToIssue);
+  const summaries: ZoneSummary[] = [];
+  for (const zone of zones) {
+    const result = await db.execute({
+      sql: `SELECT * FROM issues WHERE zone = ? AND status != 'resolved' ORDER BY priority_score DESC`,
+      args: [zone],
+    });
+    const issues = result.rows.map(r => rowToIssue(r as Record<string, unknown>));
+    if (issues.length === 0) continue;
     const criticalCount = issues.filter(i => i.severity === 'critical').length;
 
     const typeCounts = issues.reduce((acc, i) => {
@@ -247,7 +249,7 @@ export function getZonePriorities(): ZoneSummary[] {
     }, {} as Record<string, number>);
     const topType = Object.entries(typeCounts).sort((a, b) => b[1] - a[1])[0]?.[0] as import('../schemas').IssueType || 'pothole';
 
-    return {
+    summaries.push({
       zone,
       totalIssues: issues.length,
       openIssues: issues.length,
@@ -262,8 +264,9 @@ export function getZonePriorities(): ZoneSummary[] {
         status: i.status,
         createdAt: i.createdAt,
       })),
-    };
-  }).filter(z => z.totalIssues > 0);
+    });
+  }
+  return summaries;
 }
 
 // ---------- resident update ----------
@@ -271,21 +274,24 @@ export async function generateIssueResidentUpdate(
   issueId: string,
   newStatus: IssueStatus
 ): Promise<ResidentUpdate> {
-  const issue = getIssue(issueId);
+  const issue = await getIssue(issueId);
   return generateResidentUpdate(issue, newStatus);
 }
 
 // ---------- issue summary ----------
-export function getIssueSummary(issueId: string): {
+export async function getIssueSummary(issueId: string): Promise<{
   issue: TownIssue;
   history: StatusUpdate[];
   timeOpen: string;
-} {
-  const issue = getIssue(issueId);
-  const db = getDb();
-  const historyRows = db.prepare('SELECT * FROM status_history WHERE issue_id = ? ORDER BY timestamp ASC').all(issueId) as Record<string, unknown>[];
+}> {
+  const issue = await getIssue(issueId);
+  const db = getClient();
+  const historyResult = await db.execute({
+    sql: 'SELECT * FROM status_history WHERE issue_id = ? ORDER BY timestamp ASC',
+    args: [issueId] as (string | number | null | boolean)[],
+  });
 
-  const history: StatusUpdate[] = historyRows.map(r => ({
+  const history: StatusUpdate[] = historyResult.rows.map(r => ({
     issueId: r.issue_id as string,
     previousStatus: r.previous_status as IssueStatus,
     newStatus: r.new_status as IssueStatus,
@@ -303,6 +309,6 @@ export function getIssueSummary(issueId: string): {
 
 // ---------- zone summary ----------
 export async function getZoneSummary(zone: import('../schemas').Zone): Promise<string> {
-  const { issues } = listIssues({ zone, limit: 50 });
+  const { issues } = await listIssues({ zone, limit: 50 });
   return generateZoneSummary(issues, zone);
 }

@@ -3,7 +3,7 @@ import { getZonePriorities } from '@/lib/issues';
 
 export async function GET(request: NextRequest) {
   try {
-    const priorities = getZonePriorities();
+    const priorities = await getZonePriorities();
 
     return NextResponse.json({
       success: true,

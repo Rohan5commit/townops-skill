@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const result = listIssues(parsed.data);
+    const result = await listIssues(parsed.data);
 
     return NextResponse.json({
       success: true,
