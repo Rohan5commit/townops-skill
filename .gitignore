@@ -8,3 +8,4 @@ townops.db*
 coverage/
 
 .vercel
+*.tsbuildinfo
