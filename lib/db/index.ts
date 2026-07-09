@@ -107,6 +107,44 @@ async function initializeDb(db: Client): Promise<void> {
   }
 }
 
+interface HistoryStep {
+  from: string;
+  to: string;
+  actor: string;
+  note: string;
+}
+
+function getStatusHistoryPath(finalStatus: string): HistoryStep[] {
+  const paths: Record<string, HistoryStep[]> = {
+    reported: [
+      { from: 'reported', to: 'reported', actor: 'system-seed', note: 'Issue reported by citizen' },
+    ],
+    triaged: [
+      { from: 'reported', to: 'reported', actor: 'system-seed', note: 'Issue reported by citizen' },
+      { from: 'reported', to: 'triaged', actor: 'triage-agent', note: 'Issue classified and triaged by AI agent' },
+    ],
+    assigned: [
+      { from: 'reported', to: 'reported', actor: 'system-seed', note: 'Issue reported by citizen' },
+      { from: 'reported', to: 'triaged', actor: 'triage-agent', note: 'Issue classified and triaged by AI agent' },
+      { from: 'triaged', to: 'assigned', actor: 'dispatcher', note: 'Issue assigned to department based on type and zone' },
+    ],
+    in_progress: [
+      { from: 'reported', to: 'reported', actor: 'system-seed', note: 'Issue reported by citizen' },
+      { from: 'reported', to: 'triaged', actor: 'triage-agent', note: 'Issue classified and triaged by AI agent' },
+      { from: 'triaged', to: 'assigned', actor: 'dispatcher', note: 'Issue assigned to department based on type and zone' },
+      { from: 'assigned', to: 'in_progress', actor: 'resolver', note: 'Work crew dispatched, actively addressing the issue' },
+    ],
+    resolved: [
+      { from: 'reported', to: 'reported', actor: 'system-seed', note: 'Issue reported by citizen' },
+      { from: 'reported', to: 'triaged', actor: 'triage-agent', note: 'Issue classified and triaged by AI agent' },
+      { from: 'triaged', to: 'assigned', actor: 'dispatcher', note: 'Issue assigned to department based on type and zone' },
+      { from: 'assigned', to: 'in_progress', actor: 'resolver', note: 'Work crew dispatched, actively addressing the issue' },
+      { from: 'in_progress', to: 'resolved', actor: 'resolver', note: 'Issue resolved and confirmed fixed' },
+    ],
+  };
+  return paths[finalStatus] || paths.reported;
+}
+
 async function seedDemoData(db: Client): Promise<void> {
   const now = new Date().toISOString();
   const hourAgo = new Date(Date.now() - 3600000).toISOString();
@@ -201,9 +239,20 @@ async function seedDemoData(db: Client): Promise<void> {
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       args: [issue.id, issue.title, issue.description, issue.type, issue.severity, issue.urgency, issue.status, issue.zone, issue.location, issue.reported_by, issue.assigned_to, issue.priority_score, issue.affected_residents, issue.is_repeat, issue.created_at, issue.updated_at, issue.resolved_at, issue.tags],
     });
-    await db.execute({
-      sql: `INSERT INTO status_history (id, issue_id, previous_status, new_status, updated_by, note, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      args: [uuidv4(), issue.id, 'reported', issue.status, 'system-seed', 'Initial demo data', issue.created_at],
-    });
+
+    // Build realistic multi-step status history
+    const historySteps = getStatusHistoryPath(issue.status);
+    const createdAt = new Date(issue.created_at);
+    const updatedAt = new Date(issue.updated_at);
+    const totalMs = updatedAt.getTime() - createdAt.getTime();
+
+    for (let i = 0; i < historySteps.length; i++) {
+      const step = historySteps[i];
+      const ts = new Date(createdAt.getTime() + (totalMs * (i + 1)) / historySteps.length).toISOString();
+      await db.execute({
+        sql: `INSERT INTO status_history (id, issue_id, previous_status, new_status, updated_by, note, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        args: [uuidv4(), issue.id, step.from, step.to, step.actor, step.note, ts],
+      });
+    }
   }
 }
