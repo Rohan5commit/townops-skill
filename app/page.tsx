@@ -84,7 +84,7 @@ export default function LandingPage() {
         <div className="max-w-4xl mx-auto text-center">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-sm font-medium mb-6">
             <Bot className="w-4 h-4" />
-            Built for NandaHack 2024
+            Built for NandaHack 2026
           </div>
           <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-4">
             TownOps Skill
