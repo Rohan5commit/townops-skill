@@ -18,7 +18,7 @@ export async function POST(
       );
     }
 
-    const update = updateIssueStatus(
+    const update = await updateIssueStatus(
       id,
       parsed.data.status,
       parsed.data.updatedBy,
