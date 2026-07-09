@@ -105,7 +105,7 @@ GET /api/issues?status=reported&zone=downtown&limit=10
 ### 3. Get Issue Summary
 
 ```
-GET /api/issues?id={issueId}
+GET /api/issues/{id}
 ```
 
 Returns the issue with full status history and time-open summary.
@@ -332,25 +332,25 @@ curl -X POST https://townops-skill.vercel.app/api/issues \
   -d '{"title":"Streetlight outage on Elm Blvd","description":"Three consecutive streetlights are out","type":"streetlight_outage","zone":"northside","location":"Elm Blvd between Main and Park"}'
 
 # 2. Check the response and get the issue ID, then classify
-curl -X POST https://townops-skill.vercel.app/api/issues/{issueId}/classify
+curl -X POST https://townops-skill.vercel.app/api/issues/<issueId>/classify
 
 # 3. Assign to department
-curl -X POST https://townops-skill.vercel.app/api/issues/{issueId}/assign \
+curl -X POST https://townops-skill.vercel.app/api/issues/<issueId>/assign \
   -H "Content-Type: application/json" \
   -d '{"department":"public_works"}'
 
 # 4. Update status to in_progress
-curl -X POST https://townops-skill.vercel.app/api/issues/{issueId}/status \
+curl -X POST https://townops-skill.vercel.app/api/issues/<issueId>/status \
   -H "Content-Type: application/json" \
   -d '{"status":"in_progress","note":"Crew dispatched"}'
 
 # 5. Generate resident update
-curl -X POST https://townops-skill.vercel.app/api/issues/{issueId}/resident-update \
+curl -X POST https://townops-skill.vercel.app/api/issues/<issueId>/resident-update \
   -H "Content-Type: application/json" \
   -d '{"status":"in_progress"}'
 
 # 6. Mark as resolved
-curl -X POST https://townops-skill.vercel.app/api/issues/{issueId}/status \
+curl -X POST https://townops-skill.vercel.app/api/issues/<issueId>/status \
   -H "Content-Type: application/json" \
   -d '{"status":"resolved","note":"All three streetlights replaced and tested"}'
 
