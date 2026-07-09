@@ -66,7 +66,7 @@ export async function classifyIssue(
   }
 }
 
-function fallbackClassify(title: string, description: string): ClassificationResult {
+export function fallbackClassify(title: string, description: string): ClassificationResult {
   const combined = `${title} ${description}`.toLowerCase();
 
   let type: ClassificationResult['type'] = 'pothole';

@@ -6,6 +6,7 @@ module.exports = {
     '^@/(.*)$': '<rootDir>/$1',
   },
   testMatch: ['**/__tests__/**/*.test.ts'],
+  transformIgnorePatterns: ['node_modules/(?!uuid)'],
   collectCoverageFrom: [
     'lib/**/*.ts',
     '!lib/**/*.d.ts',
