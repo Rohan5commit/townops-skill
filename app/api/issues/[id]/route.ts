@@ -7,7 +7,7 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const result = getIssueSummary(id);
+    const result = await getIssueSummary(id);
 
     return NextResponse.json({
       success: true,
@@ -16,7 +16,7 @@ export async function GET(
   } catch (error) {
     console.error('Get issue error:', error);
     return NextResponse.json(
-      { error: 'Issue not found', message: (error as Error).message },
+      { error: 'Issue not found', message: 'The requested issue could not be found.' },
       { status: 404 }
     );
   }

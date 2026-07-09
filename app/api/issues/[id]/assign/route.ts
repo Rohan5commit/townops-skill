@@ -27,7 +27,7 @@ export async function POST(
   } catch (error) {
     console.error('Assign issue error:', error);
     return NextResponse.json(
-      { error: 'Assignment failed', message: (error as Error).message },
+      { error: 'Assignment failed', message: 'An internal error occurred. Please try again.' },
       { status: 500 }
     );
   }

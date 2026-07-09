@@ -25,7 +25,7 @@ export async function POST(
   } catch (error) {
     console.error('Resident update error:', error);
     return NextResponse.json(
-      { error: 'Failed to generate resident update', message: (error as Error).message },
+      { error: 'Failed to generate resident update', message: 'An internal error occurred. Please try again.' },
       { status: 500 }
     );
   }

@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Create issue error:', error);
     return NextResponse.json(
-      { error: 'Failed to create issue', message: (error as Error).message },
+      { error: 'Failed to create issue', message: 'An internal error occurred. Please try again.' },
       { status: 500 }
     );
   }
@@ -38,9 +38,14 @@ export async function GET(request: NextRequest) {
     const params: Record<string, string> = {};
     searchParams.forEach((value, key) => { params[key] = value; });
 
+    // 'open' is a special status filter that maps to all non-resolved issues.
+    // Handle it before Zod validation since it's not in the IssueStatus enum.
+    const isOpenFilter = params.status === 'open';
+    const statusForValidation = isOpenFilter ? undefined : params.status;
+
     const parsed = ListIssuesRequestSchema.safeParse({
       zone: params.zone,
-      status: params.status,
+      status: statusForValidation,
       type: params.type,
       severity: params.severity,
       limit: params.limit ? Number(params.limit) : 20,
@@ -54,7 +59,9 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const result = await listIssues(parsed.data);
+    // If 'open' was requested, pass it through as a special filter
+    const filters = isOpenFilter ? { ...parsed.data, status: 'open' as const } : parsed.data;
+    const result = await listIssues(filters);
 
     return NextResponse.json({
       success: true,
@@ -65,7 +72,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('List issues error:', error);
     return NextResponse.json(
-      { error: 'Failed to list issues', message: (error as Error).message },
+      { error: 'Failed to list issues', message: 'An internal error occurred. Please try again.' },
       { status: 500 }
     );
   }

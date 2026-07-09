@@ -32,7 +32,7 @@ export async function POST(
   } catch (error) {
     console.error('Update status error:', error);
     return NextResponse.json(
-      { error: 'Status update failed', message: (error as Error).message },
+      { error: 'Status update failed', message: 'An internal error occurred. Please try again.' },
       { status: 400 }
     );
   }

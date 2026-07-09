@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('Zone summary error:', error);
     return NextResponse.json(
-      { error: 'Failed to get zone summary', message: (error as Error).message },
+      { error: 'Failed to get zone summary', message: 'An internal error occurred. Please try again.' },
       { status: 500 }
     );
   }

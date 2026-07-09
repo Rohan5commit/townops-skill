@@ -201,7 +201,15 @@ export async function listIssues(filters: {
   const args: (string | number | null | boolean)[] = [];
 
   if (filters.zone) { conditions.push('zone = ?'); args.push(filters.zone); }
-  if (filters.status) { conditions.push('status = ?'); args.push(filters.status); }
+  if (filters.status) {
+    if (filters.status === 'open') {
+      // 'open' is a special filter that returns all non-resolved issues
+      conditions.push("status != 'resolved'");
+    } else {
+      conditions.push('status = ?');
+      args.push(filters.status);
+    }
+  }
   if (filters.type) { conditions.push('type = ?'); args.push(filters.type); }
   if (filters.severity) { conditions.push('severity = ?'); args.push(filters.severity); }
 

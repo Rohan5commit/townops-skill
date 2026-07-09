@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('Zone priorities error:', error);
     return NextResponse.json(
-      { error: 'Failed to get zone priorities', message: (error as Error).message },
+      { error: 'Failed to get zone priorities', message: 'An internal error occurred. Please try again.' },
       { status: 500 }
     );
   }

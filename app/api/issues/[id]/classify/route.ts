@@ -16,7 +16,7 @@ export async function POST(
   } catch (error) {
     console.error('Classify issue error:', error);
     return NextResponse.json(
-      { error: 'Classification failed', message: (error as Error).message },
+      { error: 'Classification failed', message: 'An internal error occurred. Please try again.' },
       { status: 500 }
     );
   }
